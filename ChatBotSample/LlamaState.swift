@@ -10,6 +10,8 @@ struct Model: Identifiable {
 
 @MainActor
 class LlamaState: ObservableObject {
+    @Published var history: [String] = []
+    
     @Published var completionLog = ""
     @Published var inputLog = ""
     @Published var outputLog = ""
@@ -45,7 +47,9 @@ class LlamaState: ObservableObject {
         }
         // TODO
 //        await llamaContext.clear()
-        
+        if outputLog != "" {
+            history.append(outputLog)
+        }
         completionLog = ""
         inputLog = ""
         outputLog = ""
@@ -57,14 +61,15 @@ class LlamaState: ObservableObject {
         let t_heat_end = DispatchTime.now().uptimeNanoseconds
         let t_heat = Double(t_heat_end - t_start) / NS_PER_S
 
-        completionLog += "Heat up took \(t_heat)s"
+        completionLog += "\nHeat up took \(t_heat)s"
         inputLog += "\(text)"
+        
+        history.append(inputLog)
 
         Task.detached {
             while await !llamaContext.is_done {
                 let result = await llamaContext.completion_loop()
                 await MainActor.run {
-                    print(result)
                     self.outputLog += "\(result)"
                 }
             }

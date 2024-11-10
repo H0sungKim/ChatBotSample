@@ -8,6 +8,14 @@
 import SwiftUI
 
 struct ContentView: View {
+    
+    enum Menu: String, CaseIterable {
+        case chat
+        case log
+    }
+    
+    @State private var menu: Menu = .chat
+    
     @StateObject var llamaState = LlamaState()
     
     @State private var inputText = "Tell me about Hongik University."
@@ -50,17 +58,61 @@ struct ContentView: View {
             TextField("Enter prompt here", text: $inputText)
                 .textFieldStyle(.roundedBorder)
                 .frame(maxWidth: .infinity)
-            Button("", systemImage: "paperplane", action: {
-                sendMessage()
-            })
-            .imageScale(.large)
-            .disabled(inputText.isEmpty || !llamaState.modelLoaded)
+            if isLoading {
+                ProgressView()
+            } else {
+                Button("", systemImage: "paperplane", action: {
+                    sendMessage()
+                })
+                .imageScale(.large)
+                .disabled(inputText.isEmpty || !llamaState.modelLoaded)
+            }
         }
     }
 
     private var resultSection: some View {
-        VStack(spacing: 16) {
-            if !llamaState.completionLog.isEmpty {
+        VStack(spacing: 8) {
+            Picker("Menu", selection: $menu) {
+                Text(Menu.chat.rawValue)
+                    .tag(Menu.chat)
+                
+                Text(Menu.log.rawValue)
+                    .tag(Menu.log)
+            }
+            .pickerStyle(.segmented)
+            .padding()
+            .frame(maxWidth: .infinity)
+            
+            switch menu {
+            case .chat:
+                ScrollViewReader { proxy in
+                    List {
+                        ForEach(llamaState.history.indices, id: \.self) { index in
+                            
+                            Text(llamaState.history[index])
+                                .listRowSeparator(.hidden)
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(index%2 == 0 ? Color.accentColor : Color.gray.opacity(0.1))
+                                .cornerRadius(16)
+                        }
+                        
+                        Text(llamaState.outputLog)
+                            .listRowSeparator(.hidden)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.gray.opacity(0.1))
+                            .cornerRadius(16)
+                            .id(llamaState.history.count)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .onChange(of: llamaState.outputLog) { _ in
+                        withAnimation {
+                            proxy.scrollTo(llamaState.history.count, anchor: .bottom)
+                        }
+                    }
+                }
+            case .log:
                 ScrollView {
                     Text(llamaState.completionLog)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -68,26 +120,11 @@ struct ContentView: View {
                         .foregroundColor(Color.white)
                         .padding()
                 }
-                .frame(maxWidth: .infinity, maxHeight: 96)
-                .background(Color.black.opacity(0.7))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color.gray.opacity(0.1))
                 .cornerRadius(4)
             }
-
-            if isLoading {
-                ProgressView()
-                    .frame(alignment: .center)
-                Spacer()
-            } else {
-                ScrollView {
-                    Text(llamaState.outputLog)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .padding()
-                .frame(maxWidth: .infinity)
-            }
         }
-        .padding()
-        .frame(maxWidth: .infinity)
     }
 
     private func sendMessage() {
@@ -97,6 +134,7 @@ struct ContentView: View {
 
             Task { @MainActor in
                 self.isLoading = false
+                inputText = ""
             }
         }
     }
